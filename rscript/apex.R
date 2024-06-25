@@ -15,10 +15,13 @@ library(ggrepel)
 library(patchwork)
 library(UpSetR)
 
+## STYLES ####
+library(envalysis)
+
 # LOAD DATA ####
 
 ## LOAD METHYLATION MATRIX ####
-apex <- read.csv("data/featured/apex/apex.csv") %>% dplyr::select(-c('kedl'))
+apex <- read.csv("data/featured/apex/apex.csv")
 
 location.breadth <- apex %>% 
   dplyr::count(breadth) %>% 
@@ -52,7 +55,8 @@ occurrence.p <- apex %>%
   labs(x = 'Occurrence', y = '#LncRNA') + 
   theme_publish() + 
   theme(
-    legend.position = "none"
+    legend.position = "none",
+    plot.margin = unit(c(1, 1, 1, 1), "cm")
   )
 
 location.p <- apex %>% 
@@ -77,11 +81,12 @@ location.p <- apex %>%
   theme_publish() + 
   theme(
     axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
-    legend.position = "none"
+    legend.position = "none",
+    plot.margin = unit(c(1, 1, 1, 1), "cm")
   )
 
 ## UPSETR PLOT ####
-upset(apex %>% 
+upset.p <- upset(apex %>% 
   dplyr::mutate(across(everything(), ~ ifelse(. == "Yes", 1, 0))) %>% 
   dplyr::select(-c(geneid, genename, breadth)),
   order.by = "freq",
@@ -93,7 +98,7 @@ upset(apex %>%
   sets.bar.color = "#3b7960"
   )
 
-patched.p <- occurrence.p + location.p + 
+patched.p <- (occurrence.p + location.p)  + 
   plot_layout(nrow = 4, ncol = 2) + 
   plot_annotation(tag_levels = 'A')
 

@@ -20,8 +20,10 @@ library(patchwork)
 speptide <- read.csv("data/sprotein/speptide.csv")
 
 ## LOAD GENEINFO MATRIX ####
-geneinfo <- read.csv("data/geneinfo/LncBookv2.0_GENCODEv34_GRCh38.filtered.gene.info.tsv", sep = "\t") %>% dplyr::select(c(geneid, symbol, gene_len))
-
+geneinfo <- read.delim("data/geneinfo/gene_info.csv", sep = ",") %>% 
+  dplyr::select(c(geneid, symbol, length)) %>% 
+  dplyr::distinct() %>% 
+  dplyr::mutate(symbol = if_else(symbol == 'N/A', geneid, symbol))
 
 # STAT ####
 length(unique(speptide$smprotid)) # TOTAL 34012 speptides
@@ -45,7 +47,7 @@ speptide.count.middle <- speptide.count.in.lncrna.gene %>%
   dplyr::summarize(smprotid_count = "3-10", n = sum(n))
 
 
-rbind(speptide.count.in.lncrna.gene %>% dplyr::filter(smprotid_count <= 3), speptide.count.middle, speptide.count.large) %>% 
+speptide.ration.p <- rbind(speptide.count.in.lncrna.gene %>% dplyr::filter(smprotid_count <= 3), speptide.count.middle, speptide.count.large) %>% 
   dplyr::mutate(ratio = n / sum(n)) %>% 
   ggplot(aes(x = "", y = ratio, fill = as.factor(smprotid_count))) + 
   geom_bar(stat = "identity") + 
@@ -53,24 +55,47 @@ rbind(speptide.count.in.lncrna.gene %>% dplyr::filter(smprotid_count <= 3), spep
     aes(label = paste(smprotid_count, "\n", "(", round(ratio * 100, 1), "%)")), 
     position = position_stack(vjust = 0.5)
   ) + 
-  scale_fill_manual(values = c('1' = '#')) + 
+  scale_fill_manual(values = c('>10' = '#6D9578', '3-10' = '#1A9E74', '3' = '#B8DCB8', '2' = '#BCE2BF', '1' = '#DFF2E0')) + 
   coord_polar("y", start = 0) + 
   labs(title = "") + 
+  theme_publish() + 
   theme_void() + 
   theme(legend.position = 'none')
 
 
-speptide %>% 
+speptide.number.vs.length.p <- speptide %>% 
   dplyr::group_by(geneid) %>%
   dplyr::summarize(smprotid_count = n_distinct(smprotid)) %>% 
   dplyr::inner_join(geneinfo, by = 'geneid') %>% 
-  dplyr::mutate(count = log10(smprotid_count), gene_len = log10(gene_len/1000)) %>% 
+  dplyr::mutate(count = log10(smprotid_count), gene_len = log10(length/1000)) %>% 
   ggplot(aes(x = gene_len, y = count)) + 
-  geom_point() + 
+  geom_point(colour = '#B8DCB8') + 
   labs(x = 'Log10(gene length)', y = 'Log10(#small protein site)') + 
-  theme_bw() + 
+  theme_publish() + 
   theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
     aspect.ratio = 1
   )
+
+speptide.rank.p <- speptide %>% 
+  dplyr::group_by(geneid) %>%
+  dplyr::summarize(smprotid_count = n_distinct(smprotid)) %>% 
+  dplyr::inner_join(geneinfo, by = 'geneid') %>% 
+  dplyr::mutate(count = log10(smprotid_count), gene_len = length/1000) %>% 
+  dplyr::mutate(average = count/gene_len) %>% 
+  dplyr::arrange(desc(average)) %>% 
+  dplyr::mutate(rank = row_number()) %>% 
+  dplyr::mutate(symbol = if_else(row_number() > 10, NA_character_, symbol)) %>% 
+  ggplot(aes(x = rank, y = average, label = symbol)) + 
+  geom_point(colour = '#B8DCB8') +
+  geom_text_repel(nudge_y = 2, color = '#B8DCB8') +
+  labs(x = NULL, y = "Average(#small protein site)") +
+  theme_publish()
+
+patched.p <- (speptide.ration.p | speptide.number.vs.length.p | speptide.rank.p) + 
+  plot_layout(nrow = 4, ncol = 3) + 
+  plot_annotation(tag_levels = 'A')
+
+pdf("figs/featured/speptide.pdf", width = 8.27, height = 11.69)
+print(patched.p)
+dev.off()
+
